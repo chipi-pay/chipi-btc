@@ -1,12 +1,11 @@
-# 🏗 Scaffold-Stark
+# Bitcoin Collaterilazed loans
 
-<h4 align="center">
-  <a href="https://docs.scaffoldstark.com/">Documentation</a> |
-  <a href="https://scaffoldstark.com/">Website</a> |
-  <a href="https://scaffold-stark-demo.vercel.app/debug">Demo</a>
-</h4>
+[Context PPT](https://docs.google.com/presentation/d/1YHEbcvJIn7MhAxlPUJO7ApqJc5Dp7vx329Vm0GhJ0WY/edit?usp=sharing)
 
-🧪 An open-source, up-to-date toolkit for building decentralized applications (dapps) on Starknet blockchain. It's designed to make it easier for developers to create and deploy smart contracts and build user interfaces that interact with those contracts.
+High Level Architecture
+
+![Arquitectura](./assets/chipi-btc.png)
+
 
 ⚙️ Built using NextJS, Starknet.js, Scarb, Starknet-React, Starknet Foundry.
 
