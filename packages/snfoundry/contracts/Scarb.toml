@@ -9,6 +9,8 @@ edition = "2024_07"
 starknet = "2.11.4"
 openzeppelin_access = "1.0.0"
 openzeppelin_token = "1.0.0"
+alexandria_bytes = "0.5.1"
+hyperlane_starknet = { git = "https://github.com/hyperlane-xyz/hyperlane-starknet.git", branch = "main" }
 
 [dev-dependencies]
 openzeppelin_utils = "1.0.0"

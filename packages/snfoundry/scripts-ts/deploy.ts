@@ -43,9 +43,12 @@ import { green } from "./helpers/colorize-log";
  */
 const deployScript = async (): Promise<void> => {
   await deployContract({
-    contract: "YourContract",
+    contract: "BtcVault",
     constructorArgs: {
       owner: deployer.address,
+      mailbox_address: deployer.address,
+      arbitrum_domain: 1,
+      loan_manager_address: deployer.address,
     },
   });
 };
