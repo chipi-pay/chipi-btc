@@ -46,8 +46,10 @@ const deployScript = async (): Promise<void> => {
     contract: "BtcVault",
     constructorArgs: {
       owner: deployer.address,
-      mailbox_address: deployer.address,
-      arbitrum_domain: 1,
+      btc_address: process.env.BTC_ADDRESS,
+      vesu_address: process.env.VESU_ADDRESS,
+      mailbox_address: "0x03c725cd6a4463e4a9258d29304bcca5e4f1bbccab078ffd69784f5193a6d792",
+      arbitrum_domain: 421614,
       loan_manager_address: deployer.address,
     },
   });
