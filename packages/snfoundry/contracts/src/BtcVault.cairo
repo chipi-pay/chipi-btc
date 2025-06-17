@@ -1,7 +1,7 @@
 use starknet::ContractAddress;
 use alexandria_bytes::{Bytes, BytesTrait};
-use hyperlane_starknet::interfaces::{IMailboxDispatcher, IMessageRecipient};
-use hyperlane_starknet::libs::message::MessageTrait;
+use contracts::interfaces::{IMailboxDispatcher, IMessageRecipient};
+use contracts::libs::message::MessageTrait;
 use core::byte_array::ByteArrayTrait;
 use core::traits::Into;
 use starknet::get_caller_address;
