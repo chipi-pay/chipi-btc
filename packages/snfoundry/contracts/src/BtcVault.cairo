@@ -1,18 +1,15 @@
 use starknet::ContractAddress;
-use alexandria_bytes::{Bytes, BytesTrait};
-use hyperlane_starknet::interfaces::{IMailboxDispatcher, IMessageRecipient};
-use hyperlane_starknet::libs::message::MessageTrait;
+// use alexandria_bytes::{Bytes, BytesTrait};
+// use hyperlane_starknet::interfaces::{IMailboxDispatcher, IMessageRecipient};
+// use hyperlane_starknet::libs::message::MessageTrait;
 use core::byte_array::ByteArrayTrait;
 use core::traits::Into;
 use starknet::get_caller_address;
 use starknet::get_contract_address;
-
-#[starknet::interface]
-trait IERC20<TContractState> {
-    fn transfer_from(ref self: TContractState, sender: ContractAddress, recipient: ContractAddress, amount: u256) -> bool;
-    fn transfer(ref self: TContractState, recipient: ContractAddress, amount: u256) -> bool;
-    fn approve(ref self: TContractState, spender: ContractAddress, amount: u256) -> bool;
-}
+use starknet::call_contract_syscall;
+use core::result::ResultTrait;
+use core::option::OptionTrait;
+use openzeppelin::token::erc20::interface::{IERC20, IERC20Dispatcher, IERC20DispatcherTrait};
 
 #[starknet::interface]
 trait IVesu<TContractState> {
@@ -38,9 +35,22 @@ pub trait IBtcVault<T> {
     fn get_loan_manager_address(self: @T) -> u256;
 }
 
+#[starknet::interface]
+trait IERC20<TContractState> {
+    fn transfer_from(
+        ref self: TContractState, sender: ContractAddress, recipient: ContractAddress, amount: u256,
+    ) -> bool;
+    fn approve(ref self: TContractState, spender: ContractAddress, amount: u256) -> bool;
+}
+
+#[starknet::interface]
+trait IVault<TContractState> {
+    fn deposit(ref self: TContractState, assets: u256, receiver: ContractAddress) -> u256;
+}
+
 #[starknet::contract]
 mod BtcVault {
-    use super::{IBtcVault, IERC20Dispatcher, IERC20DispatcherTrait, IVesuDispatcher, IVesuDispatcherTrait, IMessageRecipient};
+    use super::{IBtcVault, IERC20, IERC20Dispatcher, IERC20DispatcherTrait, IVault};
     use core::array::ArrayTrait;
     use starknet::contract_address::ContractAddress;
     use starknet::storage::{
@@ -50,6 +60,42 @@ mod BtcVault {
     use starknet::{get_caller_address, get_contract_address};
     use core::byte_array::ByteArrayTrait;
     use core::traits::Into;
+
+    #[derive(Copy, Drop, Serde, starknet::Store)]
+    struct IVesuDispatcher {
+        contract_address: ContractAddress,
+    }
+
+    #[generate_trait]
+    impl IVesuDispatcherImpl of IVesuDispatcherImpl {
+        fn new(contract_address: ContractAddress) -> IVesuDispatcher {
+            IVesuDispatcher { contract_address }
+        }
+
+        fn deposit(self: IVesuDispatcher, assets: u256, receiver: ContractAddress) -> u256 {
+            let mut calldata = ArrayTrait::new();
+            calldata.append(assets.into());
+            calldata.append(receiver.into());
+            let ret_data = starknet::call_contract_syscall(
+                self.contract_address,
+                selector!("deposit"),
+                calldata.span()
+            ).unwrap();
+            starknet::SyscallResult::unwrap(ret_data)
+        }
+
+        fn withdraw(self: IVesuDispatcher, shares: u256, receiver: ContractAddress) -> u256 {
+            let mut calldata = ArrayTrait::new();
+            calldata.append(shares.into());
+            calldata.append(receiver.into());
+            let ret_data = starknet::call_contract_syscall(
+                self.contract_address,
+                selector!("withdraw"),
+                calldata.span()
+            ).unwrap();
+            starknet::SyscallResult::unwrap(ret_data)
+        }
+    }
 
     #[event]
     #[derive(Drop, starknet::Event)]
@@ -100,6 +146,8 @@ mod BtcVault {
         user_deposits: Map<ContractAddress, u256>,
         user_shares: Map<ContractAddress, u256>,
         active_loans: Map<ContractAddress, u256>,
+        btc_token: ContractAddress,
+        vault: ContractAddress,
     }
 
     #[constructor]
@@ -110,7 +158,9 @@ mod BtcVault {
         vesu_address: ContractAddress,
         mailbox_address: ContractAddress,
         arbitrum_domain: u32,
-        loan_manager_address: u256
+        loan_manager_address: u256,
+        btc_token: ContractAddress,
+        vault: ContractAddress,
     ) {
         self.owner.write(owner);
         self.btc_address.write(btc_address);
@@ -118,6 +168,8 @@ mod BtcVault {
         self.mailbox_address.write(mailbox_address);
         self.arbitrum_domain.write(arbitrum_domain);
         self.loan_manager_address.write(loan_manager_address);
+        self.btc_token.write(btc_token);
+        self.vault.write(vault);
     }
 
     #[abi(embed_v0)]
@@ -143,62 +195,36 @@ mod BtcVault {
         }
 
         fn depositVault(ref self: ContractState, amount: u256) {
-            assert(amount > 0, 'Amount must be greater than 0');
-            
             let caller = get_caller_address();
-            let btc_address = self.get_btc_address();
-            let vesu_address = self.get_vesu_address();
-            
-            // Transfer BTC from user
-            let btc_contract = IERC20Dispatcher::new(btc_address);
-            assert(
-                btc_contract.transfer_from(caller, get_contract_address(), amount),
+            let btc_token = self.btc_token.read();
+            let vault = self.vault.read();
+            let contract_address = get_contract_address();
+
+            // Transfer BTC from user to this contract
+            assert!(
+                IERC20::transfer_from(btc_token, caller, contract_address, amount),
                 'Transfer failed'
             );
 
-            // Approve VESU contract to spend tokens
-            assert(
-                btc_contract.approve(vesu_address, amount),
+            // Approve vault to spend tokens
+            assert!(
+                IERC20::approve(btc_token, vault, amount),
                 'Approval failed'
             );
 
-            // Deposit assets into VESU protocol
-            let vesu_contract = IVesuDispatcher::new(vesu_address);
-            let shares = vesu_contract.deposit(amount, get_contract_address());
+            // Deposit into the vault
+            let _shares = IVault::deposit(vault, amount, contract_address);
 
             // Update state
             self.total_deposits.write(self.total_deposits.read() + amount);
             self.user_deposits.write(caller, self.user_deposits.read(caller) + amount);
-            self.user_shares.write(caller, self.user_shares.read(caller) + shares);
+            self.user_shares.write(caller, self.user_shares.read(caller) + _shares);
 
             // Calculate loan amount (50% of collateral)
             let loan_amount = amount / 2;
 
-            // Send message to Arbitrum LoanManager
-            let mailbox = IMailboxDispatcher::new(self.mailbox_address.read());
-            let mut message_body = BytesTrait::new_empty();
-            
-            // Encode message data
-            let caller_bytes: Bytes = caller.into();
-            let amount_bytes: Bytes = loan_amount.into();
-            let collateral_bytes: Bytes = amount.into();
-            
-            ByteArrayTrait::append(ref message_body, caller_bytes);
-            ByteArrayTrait::append(ref message_body, amount_bytes);
-            ByteArrayTrait::append(ref message_body, collateral_bytes);
-
-            // Dispatch message
-            mailbox.dispatch(
-                self.arbitrum_domain.read(),
-                self.loan_manager_address.read(),
-                message_body,
-                0, // No fee for now
-                Option::None(()),
-                Option::None(())
-            );
-
             // Emit events
-            self.emit(Deposit { user: caller, amount: amount, shares: shares });
+            self.emit(Deposit { user: caller, amount: amount, shares: _shares });
             self.emit(LoanRequested { user: caller, amount: loan_amount, collateral_amount: amount });
         }
 
@@ -212,7 +238,7 @@ mod BtcVault {
             let shares = self.user_shares.read(caller);
 
             // Withdraw from VESU
-            let vesu_contract = IVesuDispatcher::new(vesu_address);
+            let vesu_contract = IVesuDispatcher { contract_address: vesu_address };
             let withdrawn_amount = vesu_contract.withdraw(shares, caller);
 
             // Update state
@@ -230,33 +256,6 @@ mod BtcVault {
 
         fn get_total_withdrawals(self: @ContractState) -> u256 {
             self.total_withdrawals.read()
-        }
-    }
-
-    #[external(v0)]
-    impl IMessageRecipientImpl of IMessageRecipient<ContractState> {
-        fn handle(ref self: ContractState, origin: u32, sender: u256, body: Bytes) {
-            // Verify origin domain
-            assert(origin == self.arbitrum_domain.read(), 'Invalid origin domain');
-            
-            // Verify sender
-            assert(sender == self.loan_manager_address.read(), 'Invalid sender');
-
-            // Parse message body
-            let mut body_data = body.data();
-            let mut offset = 0;
-            
-            // Extract loan ID and status
-            let loan_id = body_data.at(offset);
-            offset += 1;
-            let status = body_data.at(offset);
-            
-            // Handle loan status update
-            if status == 1 { // Loan repaid
-                let caller = get_caller_address();
-                self.emit(LoanRepaid { user: caller, amount: self.active_loans.read(caller) });
-                self.active_loans.write(caller, 0);
-            }
         }
     }
 }
