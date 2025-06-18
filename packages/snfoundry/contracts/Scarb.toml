@@ -10,7 +10,8 @@ starknet = "2.10.1"
 openzeppelin_access = "0.20.0"
 openzeppelin_token = "0.20.0"
 alexandria_bytes = "0.4.0"
-contracts = { path = "../hyperlane-starknet/cairo/crates/contracts" }
+alexandria_data_structures = "0.4.0"
+contracts = { path = "../vendor/hyperlane-starknet/cairo/crates/contracts" }
 
 [dev-dependencies]
 snforge_std = "0.38.3"

@@ -34,6 +34,7 @@ name = "btc_contracts"
 version = "0.2.0"
 dependencies = [
  "alexandria_bytes",
+ "alexandria_data_structures",
  "contracts",
  "openzeppelin_access",
  "openzeppelin_token",
