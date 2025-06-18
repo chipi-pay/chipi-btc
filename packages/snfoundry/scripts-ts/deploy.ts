@@ -46,12 +46,12 @@ const deployScript = async (): Promise<void> => {
     contract: "BtcVault",
     constructorArgs: {
       owner: deployer.address,
-      btc_address: process.env.BTC_ADDRESS,
-      vesu_address: process.env.VESU_ADDRESS,
-      mailbox_address:
-        "0x03c725cd6a4463e4a9258d29304bcca5e4f1bbccab078ffd69784f5193a6d792",
-      arbitrum_domain: 421614,
-      loan_manager_address: deployer.address,
+      btc_address: "0x715649d4c493ca350743e43915b88d2e6838b1c78ddc23d6d9385446b9d6844", // process.env.BTC_ADDRESS,
+      vesu_address: "0x074655d40dcdf5d0c2d1c508e0d79ca57416dbd51facda53a08f9ec2380cf96d" // process.env.VESU_ADDRESS,
+      // mailbox_address:
+      //   "0x03c725cd6a4463e4a9258d29304bcca5e4f1bbccab078ffd69784f5193a6d792",
+      // arbitrum_domain: 421614,
+      // loan_manager_address: deployer.address,
     },
   });
 };

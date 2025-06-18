@@ -6,6 +6,9 @@ High Level Architecture
 
 ![Arquitectura](./assets/chipi-btc.png)
 
+Declaration successful
+Contract Deployed at  0x2448954a9f837f297a32f5e23c2b4c3eb769d2d756a6ff5fc4d52b6a7591ccb
+Deploy Calls Executed at  0x43e8debd333483f1b7f257e64ce7f9bc821755dd8ac4af3b529ade7ed03ab62
 
 ⚙️ Built using NextJS, Starknet.js, Scarb, Starknet-React, Starknet Foundry.
 
