@@ -1,15 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@hyperlane-xyz/core/interfaces/IMailbox.sol";
-import "@hyperlane-xyz/core/interfaces/IInterchainSecurityModule.sol";
-import "@hyperlane-xyz/core/interfaces/IMessageRecipient.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-contract LoanManager is IMessageRecipient {
-    IMailbox public hyperlaneMailbox;
-    uint32 public arbDomain;
-    bytes32 public collateralManagerAddress;
+contract LoanManager {
     uint256 public constant COLLATERAL_RATIO = 50; // 50% LTV ratio
+    IERC20 public immutable stable_token;
 
     struct Loan {
         address borrower;
@@ -26,34 +22,26 @@ contract LoanManager is IMessageRecipient {
     event CollateralReceived(bytes32 loanId, address borrower, uint256 amount);
 
     constructor(
-        address _hyperlaneMailbox,
-        uint32 _arbDomain,
-        address _collateralManager
+        address _stable_token_loan
     ) {
-        hyperlaneMailbox = IMailbox(_hyperlaneMailbox);
-        arbDomain = _arbDomain;
-        collateralManagerAddress = bytes32(uint256(uint160(_collateralManager)));
+        stable_token = IERC20(_stable_token_loan);
     }
 
-    function handle(
-        uint32 _origin,
-        bytes32 _sender,
-        bytes calldata _message
-    ) external override {
-        require(msg.sender == address(hyperlaneMailbox), "Not from mailbox");
-        require(_origin == arbDomain, "Not from Arbitrum");
-        require(_sender == collateralManagerAddress, "Not from collateral manager");
+    function requestLoan(
+        uint collateralValue, // Value in usd
+        uint256 amount, // amount in usdc
+        uint256 duration // duration in days
+    ) external {
+        require(amount > 0, "Amount must be greater than 0");
+        require(duration > 0, "Duration must be greater than 0");
+        uint maxLoanAmount = (collateralValue * COLLATERAL_RATIO) / 100;
+        require(maxLoanAmount >= amount, "Your loant amount cant be greater than your collateral");
 
-        // Decode message
-        (uint256 amount, address borrower) = abi.decode(_message, (uint256, address));
-        
-        // Calculate loan amount (50% of collateral value)
-        uint256 loanAmount = (amount * COLLATERAL_RATIO) / 100;
-
-        // Generate loan ID
+         // Calculate loan ID
         bytes32 loanId = keccak256(
             abi.encodePacked(
-                borrower,
+                msg.sender,
+                collateralValue,
                 amount,
                 block.timestamp
             )
@@ -61,19 +49,14 @@ contract LoanManager is IMessageRecipient {
 
         // Create loan
         loans[loanId] = Loan({
-            borrower: borrower,
-            amount: loanAmount,
-            dueDate: block.timestamp + 30 days, // 30 days loan term
+            borrower: msg.sender,
+            amount: amount,
+            dueDate: block.timestamp + (duration * 1 days),
             interestRate: 500, // 5% fixed interest rate
             active: true
         });
 
-        emit CollateralReceived(loanId, borrower, amount);
-        emit LoanRequested(loanId, borrower, loanAmount);
-
-        // Transfer loan amount to borrower
-        (bool sent, ) = borrower.call{value: loanAmount}("");
-        require(sent, "Failed to send loan amount");
+        stable_token.transfer(msg.sender, amount);
     }
 
     function repayLoan(bytes32 loanId) external payable {
@@ -97,12 +80,6 @@ contract LoanManager is IMessageRecipient {
             loanId
         );
 
-        hyperlaneMailbox.dispatch(
-            arbDomain,
-            collateralManagerAddress,
-            message
-        );
-
         emit LoanRepaid(loanId, msg.sender);
 
         // Return excess payment if any
@@ -113,7 +90,7 @@ contract LoanManager is IMessageRecipient {
     }
 
     // View function to get loan details
-    function getLoan(bytes32 loanId) external view returns (
+    function getLoanDetails(bytes32 loanId) external view returns (
         address borrower,
         uint256 amount,
         uint256 dueDate,
@@ -139,6 +116,5 @@ contract LoanManager is IMessageRecipient {
             (block.timestamp - (loan.dueDate - 30 days))) / (10000 * 365 days);
         return loan.amount + interest;
     }
-
-    receive() external payable {}
+  
 } 
